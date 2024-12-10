@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   chat-service:
     build: .
@@ -11,18 +9,16 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5002
-      - MONGODB_URI=mongodb://mongodb:27017/chat_service
-      - REDIS_HOST=redis
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - MONGODB_URI=mongodb://shared-mongodb:27017/chat_service
+      - REDIS_HOST=shared-redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=${RABBITMQ_URL}
     volumes:
       - ./logs:/usr/src/app/logs
       - ./uploads:/usr/src/app/uploads
-    depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
     networks:
       - chat-network
+      - shared-infrastructure
     deploy:
       resources:
         limits:
@@ -32,54 +28,9 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  mongodb:
-    image: mongo:6
-    container_name: chat-mongodb
-    restart: unless-stopped
-    environment:
-      - MONGO_INITDB_DATABASE=chat_service
-      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASS}
-    volumes:
-      - mongodb_data:/data/db
-    ports:
-      - "27017:27017"
-    networks:
-      - chat-network
-    command: ["--auth"]
-
-  redis:
-    image: redis:7-alpine
-    container_name: chat-redis
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    networks:
-      - chat-network
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: chat-rabbitmq
-    restart: unless-stopped
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS}
-      - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_VHOST}
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    ports:
-      - "5672:5672"   # AMQP protocol port
-      - "15672:15672" # Management UI port
-    networks:
-      - chat-network
-
 networks:
   chat-network:
     driver: bridge
-
-volumes:
-  mongodb_data:
-  redis_data:
-  rabbitmq_data:
+  shared-infrastructure:
+    external: true
+    name: shared-infrastructure

@@ -8,35 +8,34 @@ class RabbitMQ {
     this.channel = null;
     this.exchanges = config.rabbitmq.exchanges;
     this.queues = config.rabbitmq.queues;
+    this.isInitialized = false;
   }
 
   async connect() {
     try {
+      if (this.isInitialized) {
+        logger.warn('RabbitMQ is already initialized');
+        return this.channel;
+      }
+
+      // 기본 vhost를 사용하도록 URL 수정
+      const connectionUrl = config.rabbitmq.url.replace('vhost=chat', 'vhost=/');
+      
       // 연결 생성
-      this.connection = await amqp.connect(config.rabbitmq.url);
+      this.connection = await amqp.connect(connectionUrl);
       logger.info('RabbitMQ connected successfully');
 
       // 채널 생성
       this.channel = await this.connection.createChannel();
       logger.info('RabbitMQ channel created');
 
-      // Exchange 설정
-      await this.setupExchanges();
-      
-      // Queue 설정
-      await this.setupQueues();
+      // Exchange와 Queue 설정
+      await this.initializeInfrastructure();
 
       // 연결 에러 핸들링
-      this.connection.on('error', (err) => {
-        logger.error('RabbitMQ connection error:', err);
-        this.reconnect();
-      });
+      this.setupErrorHandlers();
 
-      this.connection.on('close', () => {
-        logger.warn('RabbitMQ connection closed');
-        this.reconnect();
-      });
-
+      this.isInitialized = true;
       return this.channel;
     } catch (error) {
       logger.error('RabbitMQ setup error:', error);
@@ -44,40 +43,15 @@ class RabbitMQ {
     }
   }
 
-  async setupExchanges() {
+  async initializeInfrastructure() {
     try {
-      // Dead Letter Exchange 설정
+      // 1. DLX (Dead Letter Exchange) 설정
       await this.channel.assertExchange('dlx', 'fanout', {
-        durable: true,
-        autoDelete: false
+        durable: true
       });
+      logger.info('Dead Letter Exchange created');
 
-      // 채팅 Exchange 설정
-      await this.channel.assertExchange(
-        this.exchanges.chat,
-        'topic',
-        {
-          durable: true,
-          autoDelete: false,
-          alternateExchange: 'dlx',
-          arguments: {
-            'x-delayed-type': 'topic'
-          }
-        }
-      );
-
-      // 알림 Exchange 설정
-      await this.channel.assertExchange(
-        this.exchanges.notification,
-        'fanout',
-        {
-          durable: true,
-          autoDelete: false,
-          alternateExchange: 'dlx'
-        }
-      );
-
-      // Dead Letter Queue 설정
+      // 2. Dead Letter Queue 설정
       await this.channel.assertQueue('dead-letter-queue', {
         durable: true,
         arguments: {
@@ -85,81 +59,91 @@ class RabbitMQ {
           'x-max-length': 10000
         }
       });
+      logger.info('Dead Letter Queue created');
 
-      // Dead Letter Queue를 Dead Letter Exchange에 바인딩
-      await this.channel.bindQueue(
-        'dead-letter-queue',
-        'dlx',
-        ''
-      );
+      // 3. DLX와 Dead Letter Queue 바인딩
+      await this.channel.bindQueue('dead-letter-queue', 'dlx', '');
+      logger.info('Dead Letter binding completed');
 
-      logger.info('RabbitMQ exchanges setup completed');
-    } catch (error) {
-      logger.error('RabbitMQ exchanges setup error:', error);
-      throw error;
-    }
-  }
+      // 4. 채팅 Exchange 설정
+      await this.channel.assertExchange(this.exchanges.chat, 'topic', {
+        durable: true,
+        alternateExchange: 'dlx'
+      });
+      logger.info('Chat Exchange created');
 
-  async setupQueues() {
-    try {
-      // 메시지 큐 설정
+      // 5. 알림 Exchange 설정
+      await this.channel.assertExchange(this.exchanges.notification, 'fanout', {
+        durable: true,
+        alternateExchange: 'dlx'
+      });
+      logger.info('Notification Exchange created');
+
+      // 6. 메시지 큐 설정
       await this.channel.assertQueue(this.queues.message, {
         durable: true,
         deadLetterExchange: 'dlx',
         arguments: {
-          'x-message-ttl': 24 * 60 * 60 * 1000, // 24시간
-          'x-max-length': 10000,
-          'x-overflow': 'reject-publish'
+          'x-message-ttl': 24 * 60 * 60 * 1000,
+          'x-max-length': 10000
         }
       });
+      logger.info('Message Queue created');
 
-      // 알림 큐 설정
+      // 7. 알림 큐 설정
       await this.channel.assertQueue(this.queues.notification, {
         durable: true,
         deadLetterExchange: 'dlx',
         arguments: {
-          'x-message-ttl': 7 * 24 * 60 * 60 * 1000, // 7일
-          'x-max-length': 50000,
-          'x-overflow': 'reject-publish'
+          'x-message-ttl': 7 * 24 * 60 * 60 * 1000,
+          'x-max-length': 50000
         }
       });
+      logger.info('Notification Queue created');
 
-      // 바인딩 설정
-      await this.channel.bindQueue(
-        this.queues.message,
-        this.exchanges.chat,
-        'message.*'
-      );
+      // 8. 큐 바인딩
+      await this.channel.bindQueue(this.queues.message, this.exchanges.chat, 'message.*');
+      await this.channel.bindQueue(this.queues.notification, this.exchanges.notification, '');
+      logger.info('Queue bindings completed');
 
-      await this.channel.bindQueue(
-        this.queues.notification,
-        this.exchanges.notification,
-        ''
-      );
-
-      logger.info('RabbitMQ queues setup completed');
     } catch (error) {
-      logger.error('RabbitMQ queues setup error:', error);
+      logger.error('Failed to initialize RabbitMQ infrastructure:', error);
       throw error;
     }
   }
 
+  setupErrorHandlers() {
+    this.connection.on('error', (err) => {
+      logger.error('RabbitMQ connection error:', err);
+      this.reconnect();
+    });
+
+    this.connection.on('close', () => {
+      logger.warn('RabbitMQ connection closed');
+      this.reconnect();
+    });
+
+    this.channel.on('error', (err) => {
+      logger.error('RabbitMQ channel error:', err);
+    });
+
+    this.channel.on('close', () => {
+      logger.warn('RabbitMQ channel closed');
+    });
+  }
+
   async reconnect() {
     try {
-      if (this.channel) {
-        await this.channel.close();
-      }
-      if (this.connection) {
-        await this.connection.close();
-      }
-
+      this.isInitialized = false;
+      await this.close();
+      
       setTimeout(async () => {
         try {
           await this.connect();
         } catch (error) {
-          logger.error('RabbitMQ reconnection error:', error);
+          logger.error('RabbitMQ reconnection failed:', error);
         }
-      }, 5000); // 5초 후 재연결 시도
+      }, 5000);
     } catch (error) {
       logger.error('RabbitMQ reconnection error:', error);
     }
@@ -181,7 +165,6 @@ class RabbitMQ {
           contentType: 'application/json',
         }
       );
-
       logger.debug('Message published:', { exchange, routingKey });
     } catch (error) {
       logger.error('Message publishing error:', error);
@@ -196,20 +179,23 @@ class RabbitMQ {
       }
 
       await this.channel.consume(queue, async (msg) => {
+        if (msg === null) {
+          logger.warn('Consumer cancelled by server');
+          return;
+        }
+
         try {
           const content = JSON.parse(msg.content.toString());
           await handler(content);
           this.channel.ack(msg);
         } catch (error) {
           logger.error('Message consumption error:', error);
-          // 메시지 처리 실패 시 dead letter queue로 이동
           this.channel.nack(msg, false, false);
         }
       });
-
       logger.info(`Consumer started for queue: ${queue}`);
     } catch (error) {
-      logger.error('Message consumer setup error:', error);
+      logger.error('Consumer setup error:', error);
       throw error;
     }
   }
@@ -218,9 +204,11 @@ class RabbitMQ {
     try {
       if (this.channel) {
         await this.channel.close();
+        this.channel = null;
       }
       if (this.connection) {
         await this.connection.close();
+        this.connection = null;
       }
       logger.info('RabbitMQ connection closed');
     } catch (error) {

@@ -45,7 +45,7 @@ class Application {
 
   setupRoutes() {
     // API 라우트
-    this.app.use('/api/v1', routes);
+    this.app.use('/api', routes);
 
     // 404 처리
     this.app.use((req, res, next) => {
