@@ -6,7 +6,6 @@ const mongoose = require('mongoose');
 const config = require('./config');
 const routes = require('./routes');
 const socketService = require('./services/socketService');
-const eventBus = require('./utils/eventBus');
 const logger = require('./utils/logger');
 const { 
   error, 
@@ -94,57 +93,41 @@ class Application {
 
   async initializeServices() {
     try {
-      // 이벤트 버스 초기화
-      await eventBus.initialize();
-      logger.info('EventBus initialized successfully');
-
-      // Socket.IO 초기화 설정 수정
+      // Socket.IO 초기화 설정
       this.io = socketIO(this.server, {
         path: '/socket.io',
         pingTimeout: 60000,
         pingInterval: 25000,
         transports: ['websocket', 'polling'],
         cors: {
-          origin: '*',  // 개발 환경에서는 모든 origin 허용
-          methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-          allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+          origin: function(origin, callback) {
+            if (!origin || config.cors.origins.includes(origin)) {
+              callback(null, true);
+            } else {
+              callback(new Error('Not allowed by CORS'));
+            }
+          },
+          methods: config.cors.methods,
+          allowedHeaders: config.cors.allowedHeaders,
           credentials: true
         },
         allowEIO3: true,
         maxHttpBufferSize: 1e8,
         connectTimeout: 45000,
-        // 추가 설정
         serveClient: false,
         cookie: false
       });
 
-      // Socket 연결 이벤트 핸들러 수정
-      this.io.on('connection', (socket) => {
-        logger.info(`New socket connection: ${socket.id}`);
-
-        // 연결 즉시 ping 테스트
-        socket.emit('ping', (error) => {
-          if (error) {
-            logger.error(`Ping failed for socket ${socket.id}:`, error);
-          } else {
-            logger.info(`Ping successful for socket ${socket.id}`);
-          }
-        });
-
-        socket.on('disconnect', (reason) => {
-          logger.info(`Socket disconnected: ${socket.id}, reason: ${reason}`);
-        });
-
-        socket.on('error', (error) => {
-          logger.error(`Socket error: ${socket.id}`, error);
-        });
-
-        socket.on('ping', (callback) => {
-          if (typeof callback === 'function') {
-            callback();
-          }
-        });
-      });
+      // MessagePack 파서 설정
+      if (config.socket.parser === 'msgpack') {
+        try {
+          const msgPackParser = require('socket.io-msgpack-parser');
+          this.io.parser = msgPackParser;
+          logger.info('Socket.IO MessagePack parser enabled');
+        } catch (error) {
+          logger.warn('MessagePack parser not available, using default parser');
+        }
+      }
 
       // Socket.IO Redis 어댑터 설정
       try {
@@ -195,10 +178,6 @@ class Application {
         await mongoose.connection.close();
         logger.info('MongoDB connection closed');
 
-        // 이벤트 버스 연결 종료
-        await eventBus.close();
-        logger.info('EventBus connection closed');
-
         process.exit(0);
       } catch (error) {
         logger.error('Error during shutdown:', error);
@@ -216,13 +195,64 @@ class Application {
     // 처리되지 않은 예외 처리
     process.on('uncaughtException', (error) => {
       logger.error('Uncaught Exception:', error);
-      process.exit(1);
+      // 심각한 에러의 경우 프로세스 종료
+      if (error.fatal) {
+        process.exit(1);
+      }
     });
 
     // 처리되지 않은 Promise 거부 처리
     process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      logger.error('Unhandled Rejection at:', {
+        promise,
+        reason: reason?.message || reason,
+        stack: reason?.stack
+      });
+      // Promise 거부를 uncaughtException으로 변환
+      throw reason;
     });
+
+    // SIGTERM 시그널 처리
+    process.on('SIGTERM', () => {
+      logger.info('SIGTERM received');
+      this.cleanup();
+    });
+
+    // SIGINT 시그널 처리
+    process.on('SIGINT', () => {
+      logger.info('SIGINT received');
+      this.cleanup();
+    });
+  }
+
+  // 정리 작업을 위한 메서드 추가
+  async cleanup() {
+    try {
+      logger.info('Starting cleanup...');
+      
+      // Socket.IO 연결 종료
+      if (this.io) {
+        const sockets = await this.io.fetchSockets();
+        for (const socket of sockets) {
+          socket.disconnect(true);
+        }
+        this.io.close();
+      }
+
+      // HTTP 서버 종료
+      if (this.server) {
+        this.server.close();
+      }
+
+      // 데이터베이스 연결 종료
+      await mongoose.connection.close();
+      
+      logger.info('Cleanup completed');
+      process.exit(0);
+    } catch (error) {
+      logger.error('Cleanup error:', error);
+      process.exit(1);
+    }
   }
 
   async start() {

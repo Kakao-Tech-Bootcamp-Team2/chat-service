@@ -13,7 +13,18 @@ const MessageSchema = new Schema({
       required: true,
       index: true
     },
-    name: String,
+    _id: {
+      type: String,
+      required: true
+    },
+    name: {
+      type: String,
+      required: true
+    },
+    email: {
+      type: String,
+      required: true
+    },
     avatar: String
   },
   content: {
@@ -34,7 +45,13 @@ const MessageSchema = new Schema({
     name: String,
     type: String,
     size: Number,
-    url: String
+    url: String,
+    thumbnailUrl: String,
+    processingStatus: {
+      type: String,
+      enum: ['pending', 'processing', 'completed', 'failed'],
+      default: 'pending'
+    }
   },
   mentions: [{
     type: Schema.Types.ObjectId,
@@ -76,6 +93,15 @@ const MessageSchema = new Schema({
       messageId: String,
       content: String
     }
+  },
+  streaming: {
+    type: Boolean,
+    default: false
+  },
+  status: {
+    type: String,
+    enum: ['sending', 'sent', 'delivered', 'read', 'failed'],
+    default: 'sending'
   }
 }, {
   timestamps: true
@@ -86,6 +112,8 @@ MessageSchema.index({ roomId: 1, createdAt: -1 });
 MessageSchema.index({ roomId: 1, sender: 1 });
 MessageSchema.index({ 'readBy.userId': 1, 'readBy.readAt': 1 });
 MessageSchema.index({ content: 'text' });
+MessageSchema.index({ roomId: 1, status: 1 });
+MessageSchema.index({ clientMessageId: 1 }, { sparse: true });
 
 // 가상 필드
 MessageSchema.virtual('isRead').get(function() {

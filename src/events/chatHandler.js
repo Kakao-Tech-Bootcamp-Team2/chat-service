@@ -107,6 +107,48 @@ class ChatHandler {
       logger.error('Handle notification delivered error:', error);
     }
   }
+
+  // 메시지 전송 상태 업데이트 핸들러 추가
+  async handleMessageStatus(data) {
+    try {
+      const { messageId, status, userId } = data;
+      
+      const message = await Message.findById(messageId);
+      if (!message) return;
+
+      message.status = status;
+      if (status === 'read') {
+        message.readBy.push({
+          userId,
+          readAt: new Date()
+        });
+      }
+      
+      await message.save();
+      
+      // 메시지 작성자에게 상태 업데이트 알림
+      await socketService.emitToUser(message.sender.id, 'message_status_update', {
+        messageId,
+        status,
+        userId
+      });
+    } catch (error) {
+      logger.error('Handle message status error:', error);
+    }
+  }
+
+  // 파일 업로드 진행상황 핸들러 추가
+  async handleFileUploadProgress(data) {
+    try {
+      const { messageId, progress } = data;
+      await socketService.emitToRoom(data.roomId, 'file_upload_progress', {
+        messageId,
+        progress
+      });
+    } catch (error) {
+      logger.error('Handle file upload progress error:', error);
+    }
+  }
 }
 
 module.exports = new ChatHandler();

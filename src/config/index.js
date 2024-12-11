@@ -47,7 +47,9 @@ const config = {
 
   // CORS 설정
   cors: {
-    origins: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+    origins: process.env.ALLOWED_ORIGINS ? 
+      process.env.ALLOWED_ORIGINS.split(',') : 
+      ['http://localhost:3000', 'http://localhost:5002'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -73,7 +75,17 @@ const config = {
   socket: {
     pingTimeout: 60000,
     pingInterval: 25000,
-    maxHttpBufferSize: 1e6, // 1MB
+    maxHttpBufferSize: 1e8,
+    parser: process.env.SOCKET_PARSER || 'default',
+    upgradeTimeout: 30000,
+    cleanupEmptyChildNamespaces: true,
+    connectionTimeout: 20000,
+    joinTimeout: 10000,
+    reconnection: {
+      attempts: 5,
+      delay: 1000,
+      maxDelay: 5000
+    }
   },
 
   // 로깅 설정
@@ -88,9 +100,24 @@ const config = {
   message: {
     maxLength: 10000,
     rateLimit: {
-      windowMs: 60 * 1000, // 1분
-      max: 60, // IP당 최대 요청 수
+      windowMs: 60 * 1000,
+      max: 60
     },
+    typing: {
+      debounce: 1000,
+      timeout: 5000
+    }
+  },
+
+  // 파일 업로드 설정 추가
+  upload: {
+    maxFileSize: 100 * 1024 * 1024, // 100MB
+    allowedTypes: ['image/*', 'application/pdf', 'application/msword'],
+    storage: {
+      provider: process.env.STORAGE_PROVIDER || 'local',
+      bucket: process.env.STORAGE_BUCKET || 'uploads',
+      region: process.env.STORAGE_REGION || 'ap-northeast-2'
+    }
   },
 };
 
