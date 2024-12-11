@@ -16,6 +16,7 @@ const {
 } = require('./middlewares');
 const redis = require('./config/redis');
 const socketIO = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
 
 class Application {
   constructor() {
@@ -31,7 +32,17 @@ class Application {
     this.app.use(helmet());
 
     // CORS
-    this.app.use(cors);
+    this.app.use((req, res, next) => {
+      res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-auth-token');
+      res.header('Access-Control-Allow-Credentials', 'true');
+      
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+      }
+      next();
+    });
 
     // 요청 본문 파싱
     this.app.use(express.json({ limit: '10mb' }));
@@ -45,14 +56,24 @@ class Application {
   }
 
   setupRoutes() {
-    // API 라우트
-    this.app.use('/api/v1', routes);
+    // Health check 엔드포인트를 가장 먼저 설정
+    this.app.get('/health', (req, res) => {
+      res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        service: 'chat-service'
+      });
+    });
+
+    // API 라우트를 /api로 변경 (v1 제거)
+    this.app.use('/api', routes);
 
     // 404 처리
     this.app.use((req, res, next) => {
       res.status(404).json({
         status: 'error',
-        message: '요청한 리소스를 찾을 수 없습니다.'
+        message: '요청 리소스를 찾을 수 없습니다.'
       });
     });
   }
@@ -77,29 +98,77 @@ class Application {
       await eventBus.initialize();
       logger.info('EventBus initialized successfully');
 
-      // 소켓 서비스 초기화
-      const corsOptions = {
-        origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-        methods: ['GET', 'POST', 'PUT', 'DELETE'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
-        credentials: true
-      };
-
+      // Socket.IO 초기화 설정 수정
       this.io = socketIO(this.server, {
-        path: process.env.SOCKET_PATH,
-        pingTimeout: parseInt(process.env.SOCKET_PING_TIMEOUT),
-        pingInterval: parseInt(process.env.SOCKET_PING_INTERVAL),
-        transports: process.env.SOCKET_TRANSPORTS.split(','),
+        path: '/socket.io',
+        pingTimeout: 60000,
+        pingInterval: 25000,
+        transports: ['websocket', 'polling'],
         cors: {
-          origin: process.env.FRONTEND_URL,
-          credentials: process.env.CORS_CREDENTIALS === 'true'
-        }
+          origin: '*',  // 개발 환경에서는 모든 origin 허용
+          methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+          allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+          credentials: true
+        },
+        allowEIO3: true,
+        maxHttpBufferSize: 1e8,
+        connectTimeout: 45000,
+        // 추가 설정
+        serveClient: false,
+        cookie: false
       });
-      logger.info('SocketService initialized successfully');
+
+      // Socket 연결 이벤트 핸들러 수정
+      this.io.on('connection', (socket) => {
+        logger.info(`New socket connection: ${socket.id}`);
+
+        // 연결 즉시 ping 테스트
+        socket.emit('ping', (error) => {
+          if (error) {
+            logger.error(`Ping failed for socket ${socket.id}:`, error);
+          } else {
+            logger.info(`Ping successful for socket ${socket.id}`);
+          }
+        });
+
+        socket.on('disconnect', (reason) => {
+          logger.info(`Socket disconnected: ${socket.id}, reason: ${reason}`);
+        });
+
+        socket.on('error', (error) => {
+          logger.error(`Socket error: ${socket.id}`, error);
+        });
+
+        socket.on('ping', (callback) => {
+          if (typeof callback === 'function') {
+            callback();
+          }
+        });
+      });
+
+      // Socket.IO Redis 어댑터 설정
+      try {
+        const pubClient = redis.getClient('socket-pub');
+        const subClient = redis.getClient('socket-sub');
+
+        this.io.adapter(createAdapter(pubClient, subClient));
+        logger.info('Socket.IO Redis adapter initialized');
+      } catch (error) {
+        logger.error('Redis adapter initialization error:', error);
+      }
+
+      // Socket.IO 서비스 초기화
+      socketService.initialize(this.io);
+      logger.info('Socket service initialized');
 
       // 이벤트 핸들러 등록
-      const { chatHandler, messageHandler } = require('./events');
-      logger.info('Event handlers registered successfully');
+      const events = require('./events');
+      if (typeof events.initialize === 'function') {
+        events.initialize(this.io);
+        logger.info('Event handlers registered successfully');
+      } else {
+        logger.warn('No event handlers to register');
+      }
 
     } catch (error) {
       logger.error('Service initialization error:', error);
@@ -158,6 +227,8 @@ class Application {
 
   async start() {
     try {
+      logger.info('Starting application...');
+
       // Redis 연결 확인 추가
       const redisClient = redis.getClient();
       await redisClient.ping();
@@ -165,21 +236,26 @@ class Application {
 
       // 데이터베이스 연결
       await this.connectDB();
+      logger.info('Database connection established');
 
       // 서비스 초기화
       await this.initializeServices();
+      logger.info('Services initialized');
 
       // 종료 핸들러 설정
       this.setupGracefulShutdown();
+      logger.info('Shutdown handlers setup complete');
 
       // 예외 핸들러 설정
       this.setupUncaughtExceptionHandlers();
+      logger.info('Exception handlers setup complete');
 
       // 서버 시작
       const port = config.server.port;
       this.server.listen(port, () => {
         logger.info(`Chat service listening on port ${port}`);
         logger.info(`Environment: ${config.env}`);
+        logger.info('Server startup complete');
       });
     } catch (error) {
       logger.error('Application startup error:', error);

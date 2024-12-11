@@ -5,7 +5,7 @@ const config = {
   
   // 서버 설정
   server: {
-    port: parseInt(process.env.PORT, 10) || 4000,
+    port: parseInt(process.env.PORT, 10) || 5002,
     host: process.env.HOST || '0.0.0.0',
   },
 
