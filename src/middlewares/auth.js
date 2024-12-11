@@ -1,4 +1,5 @@
-const eventBus = require('../utils/eventBus');
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/keys');
 const logger = require('../utils/logger');
 const { AuthenticationError, AuthorizationError } = require('../utils/errors');
 
@@ -6,28 +7,35 @@ const auth = {
   // 기본 인증 미들웨어
   requireAuth: async (req, res, next) => {
     try {
-      const token = req.headers['x-auth-token'];
-      const sessionId = req.headers['x-session-id'];
+      const token = req.header('x-auth-token');
       
       if (!token) {
-        throw new AuthenticationError('인증 토큰이 필요합니다.');
+        return res.status(401).json({
+          success: false,
+          message: '인증 토큰이 없습니다.'
+        });
       }
-
-      // Auth Service에 토큰과 세션 ID 검증 요청
-      const response = await eventBus.request('auth.validate_token', { 
-        token,
-        sessionId 
+  
+      try {
+        const decoded = jwt.verify(token, jwtSecret);
+        
+        req.user = {
+          id: decoded.id
+        };
+        
+        next();
+      } catch (err) {
+        return res.status(401).json({
+          success: false,
+          message: '유효하지 않은 토큰입니다.'
+        });
+      }
+    } catch (err) {
+      console.error('Auth middleware error:', err);
+      res.status(500).json({
+        success: false,
+        message: '서버 오류가 발생했습니다.'
       });
-
-      if (!response.success) {
-        throw new AuthenticationError('유효하지 않은 토큰입니다.');
-      }
-
-      req.user = response.user;
-      next();
-    } catch (error) {
-      logger.error('Authentication error:', error);
-      res.status(401).json({ message: '인증에 실패했습니다.' });
     }
   },
 
@@ -54,14 +62,17 @@ const auth = {
         throw new AuthenticationError('인증 토큰이 필요합니다.');
       }
 
-      const response = await eventBus.request('auth.validate_token', { token });
-
-      if (!response.success) {
+      try {
+        const decoded = jwt.verify(token, jwtSecret);
+        
+        socket.user = {
+          id: decoded.id
+        };
+        
+        next();
+      } catch (err) {
         throw new AuthenticationError('유효하지 않은 토큰입니다.');
       }
-
-      socket.user = response.user;
-      next();
     } catch (error) {
       logger.error('Socket authentication error:', error);
       next(error);
