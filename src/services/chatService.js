@@ -8,10 +8,8 @@ const { ValidationError, NotFoundError } = require('../utils/errors');
 class ChatService {
   async sendMessage({ roomId, userId, content, type = 'text', mentions = [] }) {
     try {
-      // Room Service에 사용자 권한 확인
       await this.validateRoomAccess(roomId, userId);
 
-      // 메시지 생성
       const message = await Message.create({
         roomId,
         sender: { id: userId },
@@ -22,27 +20,19 @@ class ChatService {
         }
       });
 
-      // 멘션 처리
       if (mentions.length > 0) {
         await this.processMentions(message, mentions);
       }
 
-      // 캐시 무효화
-      await cacheService.invalidateRoomMessages(roomId);
-
-      // 실시간 전송
       await socketService.emitToRoom(roomId, 'new_message', {
-        message,
-        sender: userId
-      });
-
-      // 이벤트 발행
-      await eventBus.publish('message.created', {
-        messageId: message._id,
-        roomId,
-        sender: userId,
-        type,
-        mentions
+        message: {
+          id: message._id,
+          content: message.content,
+          type: message.type,
+          sender: message.sender,
+          createdAt: message.createdAt,
+          metadata: message.metadata
+        }
       });
 
       return message;
@@ -111,8 +101,7 @@ class ChatService {
         reaction
       );
 
-      // 실시간 업데이트
-      await socketService.emitToRoom(message.roomId, 'message_reaction', {
+      await socketService.emitToRoom(message.roomId, 'reaction_updated', {
         messageId,
         userId,
         reaction,

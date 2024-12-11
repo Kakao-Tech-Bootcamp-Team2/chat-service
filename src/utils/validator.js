@@ -24,7 +24,8 @@ const schemas = {
       is: Joi.valid('image', 'file'),
       then: Joi.required(),
       otherwise: Joi.forbidden()
-    })
+    }),
+    roomId: Joi.string().required()
   }),
 
   reaction: Joi.object({

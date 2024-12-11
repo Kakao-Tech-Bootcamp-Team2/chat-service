@@ -39,3 +39,5 @@ temp/
 # Docker
 .docker/
 docker-compose.override.yml
+
+/frontend/

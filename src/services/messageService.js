@@ -3,6 +3,7 @@ const cacheService = require('./cacheService');
 const eventBus = require('../utils/eventBus');
 const logger = require('../utils/logger');
 const { NotFoundError, ValidationError } = require('../utils/errors');
+const socketService = require('../services/socketService');
 
 class MessageService {
   async getMessage({ messageId, userId }) {
@@ -27,25 +28,25 @@ class MessageService {
 
   async getMessages({ roomId, page = 1, limit = 50, before, after }) {
     try {
-      // 캐시 확인
-      const cacheKey = `room:${roomId}:messages:${page}`;
-      const cachedMessages = await cacheService.get(cacheKey);
-      
-      if (cachedMessages) {
-        return cachedMessages;
-      }
-
-      // DB에서 조회
       const messages = await Message.findByRoom(roomId, {
         limit,
         before,
         after
       });
 
-      // 캐시 저장
-      await cacheService.set(cacheKey, messages, 300); // 5분
-
-      return messages;
+      return {
+        messages: messages.map(msg => ({
+          id: msg._id,
+          content: msg.content,
+          type: msg.type,
+          sender: msg.sender,
+          createdAt: msg.createdAt,
+          updatedAt: msg.updatedAt,
+          reactions: msg.reactions,
+          readBy: msg.readBy
+        })),
+        hasMore: messages.length === limit
+      };
     } catch (error) {
       logger.error('Get messages error:', error);
       throw error;
@@ -148,6 +149,36 @@ class MessageService {
       return await MessageMention.getUserMentions(userId, { page, limit });
     } catch (error) {
       logger.error('Get user mentions error:', error);
+      throw error;
+    }
+  }
+
+  async markMessagesAsRead({ roomId, userId, messageIds }) {
+    try {
+      const updateResult = await Message.updateMany(
+        {
+          _id: { $in: messageIds },
+          roomId,
+          'readBy.userId': { $ne: userId }
+        },
+        {
+          $push: {
+            readBy: {
+              userId,
+              readAt: new Date()
+            }
+          }
+        }
+      );
+
+      await socketService.emitToRoom(roomId, 'messages_read', {
+        userId,
+        messageIds
+      });
+
+      return updateResult.modifiedCount;
+    } catch (error) {
+      logger.error('Mark messages as read error:', error);
       throw error;
     }
   }

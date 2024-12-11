@@ -15,6 +15,7 @@ const {
   rateLimit 
 } = require('./middlewares');
 const redis = require('./config/redis');
+const socketIO = require('socket.io');
 
 class Application {
   constructor() {
@@ -45,7 +46,7 @@ class Application {
 
   setupRoutes() {
     // API 라우트
-    this.app.use('/api', routes);
+    this.app.use('/api/v1', routes);
 
     // 404 처리
     this.app.use((req, res, next) => {
@@ -77,7 +78,23 @@ class Application {
       logger.info('EventBus initialized successfully');
 
       // 소켓 서비스 초기화
-      socketService.initialize(this.server);
+      const corsOptions = {
+        origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        credentials: true
+      };
+
+      this.io = socketIO(this.server, {
+        path: process.env.SOCKET_PATH,
+        pingTimeout: parseInt(process.env.SOCKET_PING_TIMEOUT),
+        pingInterval: parseInt(process.env.SOCKET_PING_INTERVAL),
+        transports: process.env.SOCKET_TRANSPORTS.split(','),
+        cors: {
+          origin: process.env.FRONTEND_URL,
+          credentials: process.env.CORS_CREDENTIALS === 'true'
+        }
+      });
       logger.info('SocketService initialized successfully');
 
       // 이벤트 핸들러 등록

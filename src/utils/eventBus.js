@@ -150,6 +150,20 @@ class EventBus {
       throw error;
     }
   }
+
+  async checkConnection() {
+    try {
+      if (!this.connection || !this.channel) {
+        throw new Error('RabbitMQ not connected');
+      }
+      // Ping the server to check the connection
+      await this.channel.checkExchange(config.rabbitmq.exchanges.chat);
+      return 'ok';
+    } catch (error) {
+      logger.error('RabbitMQ connection check error:', error);
+      return 'error';
+    }
+  }
 }
 
 module.exports = new EventBus();

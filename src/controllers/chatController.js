@@ -27,7 +27,14 @@ class ChatController {
 
       res.status(201).json({
         success: true,
-        data: message
+        data: {
+          id: message._id,
+          content: message.content,
+          type: message.type,
+          sender: message.sender,
+          createdAt: message.createdAt,
+          metadata: message.metadata
+        }
       });
     } catch (error) {
       next(error);

@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const redis = require('../config/redis');
-const rabbitmq = require('../config/rabbitmq');
+const eventBus = require('../utils/eventBus');
 const logger = require('../utils/logger');
 const { auth } = require('../middlewares');
 
@@ -22,14 +22,7 @@ router.get('/', async (req, res) => {
     }
 
     // RabbitMQ 상태 확인
-    let rabbitmqStatus = 'error';
-    try {
-      if (rabbitmq.connection && rabbitmq.channel) {
-        rabbitmqStatus = 'ok';
-      }
-    } catch (error) {
-      logger.error('RabbitMQ health check failed:', error);
-    }
+    const rabbitmqStatus = await eventBus.checkConnection();
 
     const status = {
       service: 'chat-service',
