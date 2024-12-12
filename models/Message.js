@@ -34,7 +34,7 @@ const MessageSchema = new mongoose.Schema(
     },
     file: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "File2",
+      ref: "File",
       default: null,
     },
     mentions: [
