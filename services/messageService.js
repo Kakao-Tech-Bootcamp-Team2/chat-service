@@ -24,7 +24,7 @@ class MessageService {
         sender: data.sender,
         type: data.type,
         mentions: data.mentions,
-        file: data.file,
+        file: JSON.parse(data.file),
       });
 
       await message.save();
