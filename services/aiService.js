@@ -11,11 +11,90 @@ class AIService {
         "Content-Type": "application/json",
       },
     });
-    this.streamingSessions = new Map();
+
+    // AI 사용자를 클래스로 정의
+    class AIUser {
+      constructor(id, name, email, displayName, description) {
+        this._id = id;
+        this.name = name;
+        this.email = email;
+        this.isAI = true;
+        this.displayName = displayName;
+        this.description = description;
+      }
+
+      toString() {
+        return this.name;
+      }
+    }
+
+    // AI 사용자 정보를 클래스 인스턴스로 생성
+    this.aiUsers = {
+      wayneAI: {
+        _id: "wayneAI",
+        name: "Wayne AI",
+        email: "ai@wayne.ai",
+        isAI: true,
+        displayName: "Wayne AI",
+        description: "친절하고 도움이 되는 어시스턴트",
+        toString() {
+          return this.name;
+        },
+      },
+      consultingAI: {
+        _id: "consultingAI",
+        name: "Consulting AI",
+        email: "ai@consulting.ai",
+        isAI: true,
+        displayName: "Consulting AI",
+        description: "비즈니스 컨설팅 전문가",
+        toString() {
+          return this.name;
+        },
+      },
+    };
+  }
+
+  getAIUser(aiType) {
+    const user = this.aiUsers[aiType];
+    if (!user) return null;
+
+    // 필요한 필드만 포함하여 반환
+    return {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      isAI: true,
+      displayName: user.displayName,
+      description: user.description,
+      toString() {
+        return this.name;
+      },
+    };
+  }
+
+  getAIUsers() {
+    // 필요한 필드만 포함하여 반환
+    return Object.values(this.aiUsers).map((user) => ({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      isAI: true,
+      displayName: user.displayName,
+      description: user.description,
+      toString() {
+        return this.name;
+      },
+    }));
   }
 
   async generateResponse(message, persona = "wayneAI", callbacks) {
     try {
+      const mentionMatch = message.match(/@(wayneAI|consultingAI)/);
+      if (mentionMatch) {
+        persona = mentionMatch[1];
+      }
+
       const aiPersona = {
         wayneAI: {
           name: "Wayne AI",
@@ -33,9 +112,64 @@ class AIService {
         },
       }[persona];
 
-      // ... (기존 aiService.js의 generateResponse 로직 유지)
+      const cleanMessage = message
+        .replace(/@(wayneAI|consultingAI)/g, "")
+        .trim();
+
+      callbacks?.onStart?.();
+
+      const response = await this.openaiClient.post(
+        "/v1/chat/completions",
+        {
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: `당신은 ${aiPersona.name}입니다. ${aiPersona.role}로서, ${aiPersona.traits} ${aiPersona.tone}으로 대화��니다.`,
+            },
+            {
+              role: "user",
+              content: cleanMessage,
+            },
+          ],
+          stream: true,
+        },
+        {
+          responseType: "stream",
+        }
+      );
+
+      let fullContent = "";
+
+      for await (const chunk of response.data) {
+        const lines = chunk
+          .toString()
+          .split("\n")
+          .filter((line) => line.trim());
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content || "";
+              if (content) {
+                fullContent += content;
+                callbacks?.onChunk?.(content);
+              }
+            } catch (e) {
+              console.error("Chunk parsing error:", e);
+            }
+          }
+        }
+      }
+
+      callbacks?.onComplete?.(fullContent);
+      return fullContent;
     } catch (error) {
       console.error("AI response generation error:", error);
+      callbacks?.onError?.(error);
       throw error;
     }
   }
