@@ -44,4 +44,4 @@ const FileSchema = new mongoose.Schema(
 // 인덱스 추가
 FileSchema.index({ user: 1, createdAt: -1 });
 
-module.exports = mongoose.model("File2", FileSchema);
+module.exports = mongoose.model("File", FileSchema);

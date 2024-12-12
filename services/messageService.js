@@ -16,14 +16,14 @@ class MessageService {
         });
         console.log("[MessageService] Created new user:", user);
       }
-
+      console.log(data.file);
       const message = new Message({
         room: data.room,
         content: data.content,
         sender: data.sender,
         type: data.type,
         mentions: data.mentions,
-        file: JSON.stringify(data.file),
+        file: data.file,
       });
 
       await message.save();
