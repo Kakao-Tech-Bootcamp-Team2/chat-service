@@ -4,6 +4,7 @@ const MessageHandler = require("./handlers/messageHandler");
 const RoomHandler = require("./handlers/roomHandler");
 const TypingHandler = require("./handlers/typingHandler");
 const AIHandler = require("./handlers/aiHandler");
+const ReactionHandler = require("./handlers/reactionHandler");
 const { connectionConfig } = require("../config/socket.config");
 const socketService = require("../services/socketService");
 
@@ -21,6 +22,7 @@ function initializeSocket(server) {
     const roomHandler = new RoomHandler(io, socket);
     const typingHandler = new TypingHandler(io, socket);
     const aiHandler = new AIHandler(io, socket);
+    const reactionHandler = new ReactionHandler(io, socket);
 
     // 메시지 관련 이벤트
     socket.on(
@@ -43,6 +45,11 @@ function initializeSocket(server) {
 
     // AI 관련 이벤트
     socket.on("ai_message", aiHandler.handleAIMessage.bind(aiHandler));
+
+    // 리액션 이벤트
+    socket.on("messageReaction", (data) =>
+      reactionHandler.handleMessageReaction(data)
+    );
 
     socket.on("disconnect", () => {
       console.log("Client disconnected:", socket.userId);

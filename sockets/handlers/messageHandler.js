@@ -85,6 +85,8 @@ class MessageHandler {
         room: messageData.room,
         content: messageData.content,
         sender: this.userId,
+        senderName: this.socket.name,
+        senderEmail: this.socket.email,
         type: messageData.type,
         file: messageData.fileData?._id,
       });

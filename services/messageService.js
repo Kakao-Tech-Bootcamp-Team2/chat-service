@@ -1,28 +1,20 @@
 const mongoose = require("mongoose");
 const Message = require("../models/Message");
 const User = require("../models/User");
-const notificationService = require("../services/notificationService");
 
 class MessageService {
   async createMessage(data) {
     try {
       // User 존재 여부 확인
-      const userExists = await User.findById(data.sender);
-      console.log("[MessageService] User check:", {
-        userId: data.sender,
-        exists: !!userExists,
-        userData: userExists,
-      });
+      let user = await User.findById(data.sender);
 
-      if (!userExists) {
-        // User가 없으면 생성
-        const newUser = new User({
+      if (!user) {
+        // socket.name과 socket.email을 사용하여 User 생성
+        user = await User.create({
           _id: data.sender,
-          name: "User " + data.sender.substring(0, 6), // 임시 이름
-          email: `user-${data.sender.substring(0, 6)}@example.com`, // 임시 이메일
+          name: data.senderName, // socket에서 전달받은 name
         });
-        await newUser.save();
-        console.log("[MessageService] Created new user:", newUser);
+        console.log("[MessageService] Created new user:", user);
       }
 
       const message = new Message({
@@ -39,12 +31,6 @@ class MessageService {
       const populatedMessage = await Message.findById(message._id).populate({
         path: "sender",
         select: "name email profileImage",
-      });
-
-      console.log("[MessageService] Message after populate:", {
-        messageId: message._id,
-        sender: populatedMessage.sender,
-        senderBeforePopulate: message.sender,
       });
 
       return populatedMessage;
@@ -99,6 +85,48 @@ class MessageService {
       return message;
     } catch (error) {
       console.error("Mark as read error:", error);
+      throw error;
+    }
+  }
+
+  async handleReaction(data) {
+    try {
+      const { messageId, userId, reaction, type } = data;
+
+      const message = await Message.findById(messageId);
+      if (!message) {
+        throw new Error("Message not found");
+      }
+
+      // reactions 필드가 없으면 초기화
+      if (!message.reactions) {
+        message.reactions = {};
+      }
+
+      // 해당 리액션의 사용자 배열이 없으면 초기화
+      if (!message.reactions[reaction]) {
+        message.reactions[reaction] = [];
+      }
+
+      if (type === "add") {
+        // 중복 추가 방지
+        if (!message.reactions[reaction].includes(userId)) {
+          message.reactions[reaction].push(userId);
+        }
+      } else if (type === "remove") {
+        message.reactions[reaction] = message.reactions[reaction].filter(
+          (id) => id !== userId
+        );
+        // 빈 리액션 배열 제거
+        if (message.reactions[reaction].length === 0) {
+          delete message.reactions[reaction];
+        }
+      }
+
+      await message.save();
+      return message;
+    } catch (error) {
+      console.error("[MessageService] Reaction error:", error);
       throw error;
     }
   }
