@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 const Message = require("../models/Message");
 const User = require("../models/User");
-const File = require("../models/File");
 
 class MessageService {
   async createMessage(data) {
@@ -24,7 +23,7 @@ class MessageService {
         sender: data.sender,
         type: data.type,
         mentions: data.mentions,
-        file: JSON.parse(data.file),
+        file: data.file,
       });
 
       await message.save();
