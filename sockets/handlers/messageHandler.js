@@ -88,7 +88,7 @@ class MessageHandler {
         senderName: this.socket.name,
         senderEmail: this.socket.email,
         type: messageData.type,
-        file: messageData.fileData?._id,
+        file: messageData.fileData,
       });
 
       console.log("[MessageHandler] Message created with sender:", {
