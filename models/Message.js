@@ -35,9 +35,6 @@ const MessageSchema = new mongoose.Schema(
     file: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "File",
-      required: function () {
-        return this.type === "file";
-      },
     },
     mentions: [
       {
