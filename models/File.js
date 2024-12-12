@@ -6,10 +6,6 @@ const FileSchema = new mongoose.Schema(
       type: String,
       default: () => new mongoose.Types.ObjectId().toString(),
     },
-    originalname: {
-      type: String,
-      required: [true, "원본 파일명은 필수입니다."],
-    },
     filename: {
       type: String,
       required: [true, "저장된 파일명은 필수입니다."],
