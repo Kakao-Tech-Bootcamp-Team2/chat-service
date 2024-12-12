@@ -1,70 +1,75 @@
 name: Deploy
 on: push
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: kakao-tech-bootcamp-team2/chat-service
-  VERSION: latest
-
 jobs:
-  package:
-    name: Package and Publish
+  deploy-server1:
+    name: Deploy to Server 1
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      packages: write
-      security-events: write
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-      - name: Build container image
-        run: |
-          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} .
-      - name: OCI image vulnerability scanning
-        uses: anchore/scan-action@v3
-        id: scan
-        with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
-          fail-build: false
-          severity-cutoff: high
-      - name: Log into container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish container image
-        run: docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
-
-  deploy:
-    name: Deploy to EC2
-    needs: [ package ]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Deploy to EC2
+      - name: Deploy to Server 1
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.CHAT_SERVICE_HOST }}
+          host: ${{ secrets.CHAT_SERVICE_HOST_1 }}
           username: ubuntu
           key_format: PEM
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ~/chat-service && \
-            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin && \
             git pull origin main && \
-            rm -rf ~/chat-service/logs && \
-            rm -rf ~/chat-service/uploads && \
-            mkdir -p ~/chat-service/logs && \
-            mkdir -p ~/chat-service/uploads && \
-            sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} && \
-            sudo docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} chat-service:latest && \
-            sudo docker rm -f chat-service && \
-            sudo docker run -d --name chat-service -p 80:5002 --env-file .env \
-              -v $(pwd)/logs:/usr/src/app/logs \
-              -v $(pwd)/uploads:/usr/src/app/uploads \
-              --cpus=1.5 \
-              --memory=1664m \
-              --memory-reservation=1024m \
-              --restart unless-stopped \
-              chat-service:latest
+            sudo npm install && \
+            sudo pm2 delete all || true && \
+            sudo rm -rf ~/chat-service/logs && \
+            sudo rm -rf ~/chat-service/uploads && \
+            sudo mkdir -p ~/chat-service/logs && \
+            sudo mkdir -p ~/chat-service/uploads && \
+            sudo setcap 'cap_net_bind_service=+ep' $(which node) && \
+            sudo pm2 start src/app.js -i 0
+
+  deploy-server2:
+    name: Deploy to Server 2
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Deploy to Server 2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.CHAT_SERVICE_HOST_2 }}
+          username: ubuntu
+          key_format: PEM
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/chat-service && \
+            git pull origin main && \
+            sudo npm install && \
+            sudo pm2 delete all || true && \
+            sudo rm -rf ~/chat-service/logs && \
+            sudo rm -rf ~/chat-service/uploads && \
+            sudo mkdir -p ~/chat-service/logs && \
+            sudo mkdir -p ~/chat-service/uploads && \
+            sudo setcap 'cap_net_bind_service=+ep' $(which node) && \
+            sudo pm2 start src/app.js -i 0
+
+  deploy-server3:
+    name: Deploy to Server 3
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Deploy to Server 3
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.CHAT_SERVICE_HOST_3 }}
+          username: ubuntu
+          key_format: PEM
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/chat-service && \
+            git pull origin main && \
+            sudo npm install && \
+            sudo pm2 delete all || true && \
+            sudo rm -rf ~/chat-service/logs && \
+            sudo rm -rf ~/chat-service/uploads && \
+            sudo mkdir -p ~/chat-service/logs && \
+            sudo mkdir -p ~/chat-service/uploads && \
+            sudo setcap 'cap_net_bind_service=+ep' $(which node) && \
+            sudo pm2 start src/app.js -i 0
