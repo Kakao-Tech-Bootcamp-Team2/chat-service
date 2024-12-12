@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Message = require("../models/Message");
 const User = require("../models/User");
+const File = require("../models/File");
 
 class MessageService {
   async createMessage(data) {
@@ -28,10 +29,15 @@ class MessageService {
 
       await message.save();
 
-      const populatedMessage = await Message.findById(message._id).populate({
-        path: "sender",
-        select: "name email profileImage",
-      });
+      const populatedMessage = await Message.findById(message._id)
+        .populate({
+          path: "sender",
+          select: "name email profileImage",
+        })
+        .populate({
+          path: "file",
+          select: "filename originalname mimetype size url",
+        });
 
       return populatedMessage;
     } catch (error) {
