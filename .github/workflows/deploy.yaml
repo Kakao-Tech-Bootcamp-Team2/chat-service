@@ -73,3 +73,27 @@ jobs:
             sudo mkdir -p ~/chat-service/uploads && \
             sudo setcap 'cap_net_bind_service=+ep' $(which node) && \
             sudo pm2 start app.js -i 0
+
+  deploy-server4:
+    name: Deploy to Server 4
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Deploy to Server 4
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.CHAT_SERVICE_HOST_4 }}
+          username: ubuntu
+          key_format: PEM
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/chat-service && \
+            git pull origin main && \
+            sudo npm install && \
+            sudo pm2 delete all || true && \
+            sudo rm -rf ~/chat-service/logs && \
+            sudo rm -rf ~/chat-service/uploads && \
+            sudo mkdir -p ~/chat-service/logs && \
+            sudo mkdir -p ~/chat-service/uploads && \
+            sudo setcap 'cap_net_bind_service=+ep' $(which node) && \
+            sudo pm2 start app.js -i 0
