@@ -33,8 +33,8 @@ const MessageSchema = new mongoose.Schema(
       index: true,
     },
     file: {
-      type: String,
-      defualt: "",
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "File",
     },
     mentions: [
       {
