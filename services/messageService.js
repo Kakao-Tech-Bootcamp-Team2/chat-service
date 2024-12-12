@@ -23,7 +23,7 @@ class MessageService {
         sender: data.sender,
         type: data.type,
         mentions: data.mentions,
-        file: data.file,
+        file: JSON.stringify(data.file),
       });
 
       await message.save();
