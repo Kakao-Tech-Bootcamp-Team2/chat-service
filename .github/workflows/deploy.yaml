@@ -24,7 +24,7 @@ jobs:
             sudo mkdir -p ~/chat-service/logs && \
             sudo mkdir -p ~/chat-service/uploads && \
             sudo setcap 'cap_net_bind_service=+ep' $(which node) && \
-            sudo pm2 start src/app.js -i 0
+            sudo pm2 start app.js -i 0
 
   deploy-server2:
     name: Deploy to Server 2
@@ -48,7 +48,7 @@ jobs:
             sudo mkdir -p ~/chat-service/logs && \
             sudo mkdir -p ~/chat-service/uploads && \
             sudo setcap 'cap_net_bind_service=+ep' $(which node) && \
-            sudo pm2 start src/app.js -i 0
+            sudo pm2 start app.js -i 0
 
   deploy-server3:
     name: Deploy to Server 3
@@ -72,4 +72,4 @@ jobs:
             sudo mkdir -p ~/chat-service/logs && \
             sudo mkdir -p ~/chat-service/uploads && \
             sudo setcap 'cap_net_bind_service=+ep' $(which node) && \
-            sudo pm2 start src/app.js -i 0
+            sudo pm2 start app.js -i 0
