@@ -1,18 +1,10 @@
-// config/rabbitmq.js
 const amqp = require("amqplib");
-
-const RABBITMQ_CONFIG = {
-  url: process.env.RABBITMQ_URL,
-};
 
 let channel = null;
 
 async function initializeRabbitMQ() {
   try {
-    // URL 형식으로 연결 설정
-    const connectionURL = `${RABBITMQ_CONFIG.url}`;
-
-    const connection = await amqp.connect(connectionURL);
+    const connection = await amqp.connect(process.env.RABBITMQ_URL);
     channel = await connection.createChannel();
 
     // 연결 에러 핸들링
