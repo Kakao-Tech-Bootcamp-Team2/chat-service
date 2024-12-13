@@ -22,7 +22,8 @@
     "mongoose": "^8.0.3",
     "redis": "^4.6.11",
     "socket.io": "^4.7.2",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "amqplib": "^0.10.3"
   },
   "devDependencies": {
     "eslint": "^8.55.0",

@@ -1,12 +1,14 @@
 const Message = require("../../models/Message");
 const messageService = require("../../services/messageService");
 const messageEvents = require("../../events/messageEvents");
-
+const amqp = require("amqplib");
+const { getChannel } = require("../../config/rabbitmq");
 class MessageHandler {
   constructor(io, socket) {
     this.io = io;
     this.socket = socket;
     this.userId = socket.userId;
+    this.channel = getChannel();
   }
 
   async loadMessages(roomId, before, limit = messageConfig.BATCH_SIZE) {
@@ -89,6 +91,27 @@ class MessageHandler {
         senderEmail: this.socket.email,
         type: messageData.type,
         file: messageData.fileData,
+      });
+
+      // RabbitMQ를 통해 모든 서버에 메시지 발행
+      if (this.channel) {
+        await this.channel.publish(
+          "chat_messages",
+          "",
+          Buffer.from(
+            JSON.stringify({
+              ...message.toJSON(),
+              room: messageData.room,
+            })
+          )
+        );
+      } else {
+        console.warn("RabbitMQ channel not initialized");
+      }
+
+      console.log("[MessageHandler] Message published to all servers:", {
+        messageId: message._id,
+        room: messageData.room,
       });
 
       console.log("[MessageHandler] Message created with sender:", {

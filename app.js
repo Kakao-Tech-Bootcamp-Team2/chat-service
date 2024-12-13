@@ -1,5 +1,6 @@
 const express = require("express");
 const connectDB = require("./config/database");
+const { initializeRabbitMQ } = require("./config/rabbitmq");
 const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
@@ -41,6 +42,9 @@ class Server {
       // Redis 연결
       await redisClient.connect();
       logger.info("Redis Connected");
+
+      await initializeRabbitMQ();
+      logger.info("RabbitMQ Connected");
 
       // 미들웨어 설정
       this.setupMiddleware();
