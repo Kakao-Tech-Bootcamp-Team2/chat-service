@@ -2,12 +2,12 @@
 const amqp = require("amqplib");
 
 const RABBITMQ_CONFIG = {
-  protocol: process.env.RABBITMQ_PROTOCOL || "amqp",
-  hostname: process.env.RABBITMQ_HOST || "localhost",
-  port: process.env.RABBITMQ_PORT || 5672,
-  username: process.env.RABBITMQ_USERNAME || "chat_user",
-  password: process.env.RABBITMQ_PASSWORD || "chat_pass",
-  vhost: process.env.RABBITMQ_VHOST || "chat",
+  protocol: process.env.RABBITMQ_PROTOCOL,
+  hostname: process.env.RABBITMQ_HOST,
+  port: process.env.RABBITMQ_PORT,
+  username: process.env.RABBITMQ_USERNAME,
+  password: process.env.RABBITMQ_PASSWORD,
+  vhost: process.env.RABBITMQ_VHOST,
 };
 
 let channel = null;
