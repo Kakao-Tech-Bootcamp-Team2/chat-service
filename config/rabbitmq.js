@@ -2,12 +2,7 @@
 const amqp = require("amqplib");
 
 const RABBITMQ_CONFIG = {
-  protocol: process.env.RABBITMQ_PROTOCOL,
-  hostname: process.env.RABBITMQ_HOST,
-  port: process.env.RABBITMQ_PORT,
-  username: process.env.RABBITMQ_USERNAME,
-  password: process.env.RABBITMQ_PASSWORD,
-  vhost: process.env.RABBITMQ_VHOST,
+  url: process.env.RABBITMQ_URL,
 };
 
 let channel = null;
@@ -15,7 +10,7 @@ let channel = null;
 async function initializeRabbitMQ() {
   try {
     // URL 형식으로 연결 설정
-    const connectionURL = `${RABBITMQ_CONFIG.protocol}://${RABBITMQ_CONFIG.username}:${RABBITMQ_CONFIG.password}@${RABBITMQ_CONFIG.hostname}:${RABBITMQ_CONFIG.port}/${RABBITMQ_CONFIG.vhost}`;
+    const connectionURL = `${RABBITMQ_CONFIG.url}`;
 
     const connection = await amqp.connect(connectionURL);
     channel = await connection.createChannel();
